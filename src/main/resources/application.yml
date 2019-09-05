@@ -55,3 +55,6 @@ spring:
                 initial-size: 5
                 min-idle: 5
                 max-active: 10
+
+server:
+    port: 9999

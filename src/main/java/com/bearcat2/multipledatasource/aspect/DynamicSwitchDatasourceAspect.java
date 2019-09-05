@@ -29,37 +29,29 @@ import java.lang.reflect.Method;
 @Component
 public class DynamicSwitchDatasourceAspect {
 
-    /** 切点表达式,找出所有service包及其后代包下的所有方法 */
+    /** 切点表达式,找出所有service包及其后代包下所有类的所有方法 */
     @Pointcut("execution(* com.bearcat2.multipledatasource.service..*(..))")
     public void pointcut() {}
 
     /**
-     * 在业务方法调用之前执行
+     * 在业务方法调用之前执行 先判断访问的目标方法上是否标记了DynamicSwitchDatasource注解,有则取出注解值直接返回
+     * <p>
+     * 没有再判断访问的目标上是否标记注解有则返回如果访问的目标方法和目标类上都没有标记注解,则数据源默认设置为 DatasourceEnum.DS1
      *
      * @param joinPoint 连接点
      */
     @Before("pointcut()")
     public void beforeSwitchDatasource(JoinPoint joinPoint) {
-        //获得当前访问的目标类对象
-        Class<?> targetClass = joinPoint.getTarget().getClass();
-        //获得访问的方法名
-        String methodName = joinPoint.getSignature().getName();
-        //得到方法的参数的类型
-        Class[] parameterTypes = ((MethodSignature) joinPoint.getSignature()).getParameterTypes();
-        Method targetMethod = null;
-        try {
-            targetMethod = targetClass.getMethod(methodName, parameterTypes);
-        } catch (NoSuchMethodException e) {
-            log.error("获取目标方法失败", e);
-        }
-
-        // 先使用目标方法上标记的 DynamicSwitchDatasource 注解，如果目标方法上没有则使用目标类上注解，如果两者都没有标记则使用默认的
-        if (targetMethod != null && targetMethod.isAnnotationPresent(DynamicSwitchDatasource.class)) {
+        //获得当前访问的目标方法
+        Method targetMethod = ((MethodSignature) joinPoint.getSignature()).getMethod();
+        if (targetMethod.isAnnotationPresent(DynamicSwitchDatasource.class)) {
             DynamicSwitchDatasource annotation = targetMethod.getAnnotation(DynamicSwitchDatasource.class);
             DatasourceSwitchThreadLocal.set(annotation.value());
             return;
         }
 
+        //获得当前访问的目标类
+        Class<?> targetClass = joinPoint.getTarget().getClass();
         if (targetClass.isAnnotationPresent(DynamicSwitchDatasource.class)) {
             DynamicSwitchDatasource annotation = targetClass.getAnnotation(DynamicSwitchDatasource.class);
             DatasourceSwitchThreadLocal.set(annotation.value());
@@ -70,7 +62,9 @@ public class DynamicSwitchDatasourceAspect {
         DatasourceSwitchThreadLocal.set(DatasourceEnum.DS1);
     }
 
-    /** 在业务方法执行完毕之后执行,无论业务方法是否抛出异常 */
+    /**
+     * 在业务方法执行完毕之后执行,无论业务方法是否抛出异常 .清除设置的默认数据源
+     */
     @After("pointcut()")
     public void afterSwitchDatasource() {
         DatasourceSwitchThreadLocal.remove();
